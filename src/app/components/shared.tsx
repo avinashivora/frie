@@ -9,6 +9,27 @@ import type {
   LocalExplanation,
   ReliabilityLevel,
 } from "../../services/api";
+
+const DIMENSION_LABELS: Record<string, string> = {
+  credit_behaviour: "Credit Behaviour",
+  affordability: "Affordability",
+  cashflow_stability: "Cash-Flow Stability",
+  financial_resilience: "Financial Resilience",
+  commitment_adherence: "Commitment Adherence",
+  spending_behaviour: "Spending Behaviour",
+};
+
+function dimensionSummary(score: number | null, status: string): string {
+  if (score === null || status === "UNAVAILABLE" || status === "NOT_ESTABLISHED") {
+    return "There isn’t enough information yet to assess this area.";
+  }
+  const summary = score >= 80
+    ? "The information available gives a strong picture in this area."
+    : score >= 55
+      ? "The information available gives a mixed picture in this area."
+      : "This is an area that may benefit from attention.";
+  return status === "LIMITED" ? `${summary} This view uses partial information.` : summary;
+}
 import {
   FrieApiError,
   buildFeatures,
@@ -19,7 +40,6 @@ import {
   createAssessment,
 } from "../../services/api";
 import {
-  friendlyFeatureLabel,
   type ReadinessSourceKey,
 } from "../readinessPresentation";
 
@@ -122,16 +142,18 @@ export function DemoPills() {
 export function ScoreGauge({
   score,
   level,
+  maximum = 600,
 }: {
   score: number;
   level: ReliabilityLevel;
+  maximum?: number;
 }) {
-  const progress = Math.max(0, Math.min(100, score));
+  const progress = Math.max(0, Math.min(100, (score / maximum) * 100));
   return (
     <div
       className="relative mx-auto w-52"
       role="img"
-      aria-label={`FRIE score ${score.toFixed(1)} out of 100, ${level}`}
+      aria-label={`FRIE score ${score.toFixed(1)} out of ${maximum}, ${level}`}
     >
       <svg viewBox="0 0 220 130" className="w-full" aria-hidden="true">
         <path
@@ -222,7 +244,7 @@ export function FullPredictionCard({
   onCompleteSource,
 }: {
   onCompleteSource?: (source: ReadinessSourceKey) => void;
-}) {
+  }) {
   const [status, setStatus] = useState<AssessmentStatus | null>(null),
     [result, setResult] = useState<AssessmentRecord | null>(null),
     [stale, setStale] = useState(false),
@@ -300,7 +322,7 @@ export function FullPredictionCard({
     complete = status?.assessment_state === "complete",
     estimated = shown?.assessment_state === "estimated";
   return (
-    <div className="bg-white rounded-xl border border-[#F1F5F9] p-6 space-y-4">
+    <div className="bg-white rounded-xl border border-[#F1F5F9] p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-bold">
           {shown
@@ -398,7 +420,7 @@ export function FullPredictionCard({
         </button>
       )}
       {shown && (
-        <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+        <div className="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-bold uppercase text-emerald-800">
               {estimated ? "Estimated FRIE Score" : "FRIE Score"}
@@ -410,9 +432,42 @@ export function FullPredictionCard({
             </span>
           </div>
           <ScoreGauge
-            score={shown.frie_score}
+            score={shown.frie_score.value ?? 0}
             level={shown.reliability_level}
+            maximum={shown.frie_score.maximum}
           />
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span>{(shown.frie_score.coverage * 100).toFixed(0)}% coverage</span>
+            <span>{shown.frie_score.confidence} confidence</span>
+            <span>{shown.frie_score.available_dimensions}/6 dimensions available</span>
+          </div>
+          <div>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Six dimension scores</h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+            {Object.entries(shown.dimensions).map(([key, dimension]) => (
+              <div key={key} className="rounded-lg border border-white bg-white/80 p-3">
+                <div className="flex items-start justify-between gap-2 text-xs">
+                  <span className="font-medium text-slate-700">{DIMENSION_LABELS[key] ?? "Dimension"}</span>
+                  <strong className="shrink-0">{dimension.score === null ? "—" : `${dimension.score.toFixed(1)}/100`}</strong>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-500">{dimension.status.replaceAll("_", " ")} · {dimension.confidence} confidence · {(dimension.coverage * 100).toFixed(0)}% coverage</p>
+              </div>
+            ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Purpose-specific scores</h4>
+            <div className="grid grid-cols-3 gap-2">
+              {(["neutral", "loan", "insurance"] as const).map((key) => {
+                const profile = shown.profiles?.[key] ?? (shown.profile.profile === key ? shown.profile : null);
+                return <div key={key} className="rounded-lg border border-emerald-100 bg-white p-3 text-center">
+                  <p className="text-[10px] font-semibold capitalize text-slate-500">{key === "neutral" ? "Neutral" : key}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{profile?.score == null ? "—" : `${profile.score.toFixed(1)}`}</p>
+                  <p className="text-[10px] text-slate-500">/100 · {profile?.confidence ?? "Unavailable"}</p>
+                </div>;
+              })}
+            </div>
+          </div>
           {estimated && (
             <p className="text-xs text-slate-600">
               Based on the financial information currently available.
@@ -422,10 +477,7 @@ export function FullPredictionCard({
             Assessed {new Date(shown.created_at).toLocaleString()} · FRIE
             prototype assessment
           </p>
-          <p className="text-[11px] text-slate-500">
-            Prototype score approximation. Reliability bands are prototype
-            calibration labels, not regulatory standards.
-          </p>
+          <p className="text-[11px] text-slate-500">FRIE-6D deterministic score. Display category only; it is not a validated financial-risk threshold.</p>
           <button
             className="text-xs font-semibold text-blue-700"
             onClick={async () => {
@@ -453,40 +505,18 @@ export function FullPredictionCard({
               className="grid gap-3 sm:grid-cols-2"
               aria-label="Assessment explanation"
             >
-              {[
-                {
-                  label: "Factors that raised your score",
-                  rows: explanation.top_positive,
-                },
-                {
-                  label: "Factors that lowered your score",
-                  rows: explanation.top_negative,
-                },
-              ].map((g) => (
-                <div key={g.label} className="rounded-lg bg-white/70 p-3">
-                  <p className="mb-2 text-[11px] font-bold text-slate-600">
-                    {g.label}
-                  </p>
-                  {g.rows.slice(0, 5).map((item) => (
-                    <div
-                      key={item.feature}
-                      className="flex justify-between gap-2 py-1 text-[11px]"
-                    >
-                      <span>
-                        {friendlyFeatureLabel(item.feature)} ·{" "}
-                        {String(item.value ?? "Limited information")}
-                      </span>
-                      <strong>
-                        {item.contribution > 0 ? "+" : ""}
-                        {item.contribution.toFixed(3)}
-                      </strong>
-                    </div>
-                  ))}
+              {explanation.dimensions.map((item) => (
+                <div key={item.dimension} className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-slate-700">{DIMENSION_LABELS[item.dimension] ?? "Dimension"}</p>
+                    <strong className="text-xs text-slate-800">{item.score === null ? "—" : `${item.score.toFixed(1)}/100`}</strong>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-600">{dimensionSummary(item.score, item.status)}</p>
+                  <p className="mt-2 text-[10px] text-slate-500">{item.status.replaceAll("_", " ")} · {item.confidence} confidence</p>
                 </div>
               ))}
               <p className="text-[11px] text-slate-500 sm:col-span-2">
-                These factors describe how information affected this assessment.
-                They do not establish cause and effect.
+                The FRIE Base Score is the six dimension scores added together. Purpose-specific scores use different weightings. This is a deterministic summary of the information provided, not a prediction of future outcomes.
               </p>
             </div>
           )}

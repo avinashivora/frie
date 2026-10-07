@@ -18,4 +18,4 @@ ALTER TABLE predictions
 ADD COLUMN overall_coverage FLOAT;
 
 ALTER TABLE predictions
-ADD COLUMN overall_confidence FLOAT;
+ADD COLUMN overall_confidence VARCHAR(16);

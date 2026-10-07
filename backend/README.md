@@ -1,63 +1,41 @@
-# FRIE Prototype Backend
+# FRIE deterministic scoring backend
 
-This FastAPI service exposes the supplied FRIE preprocessing-plus-XGBoost pipeline as a prototype API. It does not retrain, alter, or reimplement the model. The existing React/Vite frontend is intentionally not connected in this phase.
+This FastAPI service implements the authoritative FRIE six-dimension scoring methodology. It is a deterministic decision-support prototype, not a validated prediction of default or repayment outcomes. The proposal describes FRIE as a complementary financial intelligence profile that supports human decision-makers.
 
-## Architecture
+## Scoring
 
-```text
-FastAPI routes → PredictionService → saved joblib Pipeline → FRIE score response
-```
+Credit Behaviour, Affordability, Cash-Flow Stability, Financial Resilience, Commitment Adherence, and Spending Behaviour each score from 0 to 100. The FRIE Base Score is their direct sum, out of 600. Unavailable and not-established dimensions are omitted rather than silently treated as zero; coverage, status, and qualitative confidence describe the evidence available.
 
-`PredictionService` loads the model once during application startup. `FeatureContract` is the single authoritative contract: it reads the exact 98 names and their numeric/categorical groups from `models/frie_model_config.json`. `FeatureService` accepts only a complete source-normalized customer mapping and constructs the one-row dataframe in the saved pipeline's own feature order.
+Purpose profiles are separate weighted scores out of 100. Neutral, loan, and insurance weights are defined in `app/services/scoring/profiles.py`. Missing dimensions have their configured weights redistributed across usable dimensions. The neutral base score remains unweighted.
 
-## Setup
+`POST /predict` accepts a complete feature record. `POST /predict/partial` scores available evidence directly without imputation and returns feature coverage and missing source groups. Both responses include `algorithm_version`, the nested `frie_score`, all six dimension results, and the profile result. Authenticated assessment endpoints persist the same result; `/analysis/latest` and `/analysis/history` deserialize it in the same structure.
+
+Dimension responses include score, coverage, status (`AVAILABLE`, `LIMITED`, `NOT_ESTABLISHED`, or `UNAVAILABLE`), qualitative confidence (`High`, `Moderate`, or `Low`), indicator details, effective weights, and validation metadata. Missing evidence is not equivalent to a financial zero.
+
+The old eight-indicator calculations remain only for recommendation and compatibility context. They do not calculate the FRIE Base Score. XGBoost artifacts and their score-imitation experiments are legacy/experimental and are not loaded into the authoritative scoring flow. No predictive accuracy is claimed from synthetic score labels.
+
+## Setup and run
 
 From `backend/` in PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m scripts.migrate_frie6d
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The pinned versions include scikit-learn `1.6.1`, matching the serialized pipeline metadata. No model artifacts are modified during setup.
+The migration inspects the existing SQLite schema and adds only absent columns. If an old database has numeric `overall_confidence`, the migration preserves that field as `overall_confidence_legacy` and adds a qualitative `VARCHAR(16)` field rather than converting numeric values into misleading labels.
 
-## Run
+## Local validation
 
 ```powershell
-uvicorn app.main:app --reload
+python -m compileall app scripts tests
+python -m pytest
+python scripts/demo_frie6d.py
 ```
 
-Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for the automatically generated API documentation.
+The demo reads row zero from `../data/frie_synthetic_1000_v22.csv` by default and accepts a CSV path and `--row` override. The dataset is not included in this checkout. The demo exits with a clear message when it is unavailable. Mathematical invariant tests cover score bounds, determinism, schema shape, weight redistribution, and missing-data semantics.
 
-## Endpoints
-
-- `GET /health` reports API/model readiness without exposing filesystem details.
-- `POST /predict` accepts `{ "features": { ... } }`, where `features` contains all 86 numeric and 12 categorical fields defined in `models/frie_model_config.json`. Unknown and omitted fields are rejected; no arbitrary defaults, zero filling, or undocumented financial derivations are used.
-
-Responses contain the display-rounded `frie_score` and a prototype `reliability_level`:
-
-| Score | Prototype level |
-|---:|---|
-| 0–39.99 | Poor |
-| 40–54.99 | Average |
-| 55–69.99 | Good |
-| 70–100 | Excellent |
-
-Scores are prototype/research outputs only. They are not regulatory decisions, universal thresholds, or externally validated measures of real-world financial reliability.
-
-## Model artifacts
-
-The service reads, but never changes:
-
-- `backend/models/frie_xgboost_final_pipeline.joblib`
-- `backend/models/frie_model_config.json`
-
-## Tests
-
-```powershell
-pytest
-```
-
-Tests verify the feature contract, validation behavior, startup/model loading, and `/health`. The real prediction integration test reads one complete 98-feature row from `D:\frie\Model Train\frie_ml_test.csv` when available; it never sends that file's `frie_score` column to the API. The test is skipped when the externally stored dataset is unavailable.
+Display categories derived from the normalized /600 score are temporary UI buckets only; they are not validated financial-risk thresholds. Synthetic data supports execution and missing-data checks, not claims of predictive performance.

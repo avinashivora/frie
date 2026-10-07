@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
-
-from app.core.config import get_settings
 from app.db.session import engine
-
+from sqlalchemy import inspect, text
 
 COLUMNS = {
     "algorithm_version": ("VARCHAR(64) DEFAULT 'FRIE-6D-v1.0'"),
@@ -14,7 +11,7 @@ COLUMNS = {
     "scoring_profile": ("VARCHAR(16) DEFAULT 'neutral'"),
     "dimensions_json": ("TEXT DEFAULT '{}'"),
     "overall_coverage": ("FLOAT"),
-    "overall_confidence": ("FLOAT"),
+    "overall_confidence": ("VARCHAR(16)"),
 }
 
 
@@ -27,9 +24,29 @@ def main() -> None:
             "Start the application once so the base schema is created."
         )
 
-    existing = {column["name"] for column in inspector.get_columns("predictions")}
+    columns = {column["name"]: column for column in inspector.get_columns("predictions")}
 
     with engine.begin() as connection:
+        confidence = columns.get("overall_confidence")
+        if confidence and "CHAR" not in str(confidence["type"]).upper():
+            # Preserve legacy numeric data under an explicit legacy name.
+            # SQLite cannot change a column's affinity in place; adding a new
+            # qualitative column avoids unsafe table rebuilds/FK rewrites.
+            if "overall_confidence_legacy" not in columns:
+                connection.execute(text(
+                    "ALTER TABLE predictions RENAME COLUMN overall_confidence "
+                    "TO overall_confidence_legacy"
+                ))
+                print("[RENAME] overall_confidence -> overall_confidence_legacy")
+            connection.execute(text(
+                "ALTER TABLE predictions ADD COLUMN overall_confidence VARCHAR(16)"
+            ))
+            print("[ADD] overall_confidence VARCHAR(16)")
+
+        existing = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(predictions)"))
+        }
         for column_name, definition in COLUMNS.items():
             if column_name in existing:
                 print(f"[SKIP] {column_name} already exists.")

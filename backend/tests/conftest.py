@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
@@ -37,7 +38,11 @@ def db_file(tmp_path):
 def test_client(db_file) -> Iterator[tuple[TestClient, Any]]:
     """Test client bound to the isolated database, plus its session factory."""
 
-    engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        f"sqlite:///{db_file}",
+        connect_args={"check_same_thread": False},
+        poolclass=NullPool,
+    )
     Base.metadata.create_all(bind=engine)
     testing_sessions = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
@@ -58,15 +63,20 @@ def test_client(db_file) -> Iterator[tuple[TestClient, Any]]:
             yield client, testing_sessions
     finally:
         app.dependency_overrides.clear()
+        testing_sessions.close_all()
+        engine.dispose()
 
 
 @pytest.fixture()
 def client_tables(db_file) -> list[str]:
     """Table names present in a freshly initialized database file."""
 
-    engine = create_engine(f"sqlite:///{db_file}")
+    engine = create_engine(f"sqlite:///{db_file}", poolclass=NullPool)
     Base.metadata.create_all(bind=engine)
-    return inspect(engine).get_table_names()
+    try:
+        return inspect(engine).get_table_names()
+    finally:
+        engine.dispose()
 
 
 def register_user(client: TestClient, email: str, password: str) -> dict[str, Any]:

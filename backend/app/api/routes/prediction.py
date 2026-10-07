@@ -14,8 +14,15 @@ from app.services.prediction_service import InsufficientDataError, ModelUnavaila
 router = APIRouter(tags=["prediction"])
 
 
-def reliability_level(score: float, maximum: float = 600.0) -> str:
+def reliability_level(
+    score: float,
+    *,
+    maximum: float = 600.0,
+) -> str:
     """Temporary display category for the six-dimension FRIE score."""
+
+    if maximum <= 0:
+        raise ValueError("maximum must be greater than zero.")
 
     normalized = (score / maximum) * 100.0
 
@@ -32,58 +39,76 @@ def reliability_level(score: float, maximum: float = 600.0) -> str:
 @router.post(
     "/predict",
     response_model=PredictionResponse,
-    summary="Generate a prototype FRIE score using the saved XGBoost pipeline",
+    summary="Generate a deterministic FRIE six-dimension assessment",
     description=(
-        "Requires every configured FRIE feature. This is a prototype/research score and is "
-        "not a regulatory, universal, or externally validated financial-reliability assessment."
+        "Requires the configured FRIE feature set. The authoritative FRIE "
+        "score is calculated by the deterministic six-dimension methodology."
     ),
 )
-def predict(payload: PredictionRequest, request: Request) -> PredictionResponse:
+def predict(
+    payload: PredictionRequest,
+    request: Request,
+) -> PredictionResponse:
     service = request.app.state.prediction_service
+
     try:
-        score = service.predict(payload.features.model_dump())
+        result = service.predict(
+            payload.features.model_dump(),
+            profile="neutral",
+        )
     except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FRIE prediction service is temporarily unavailable.",
+            detail="FRIE scoring service is temporarily unavailable.",
         ) from exc
     except FeatureInputError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
         ) from exc
 
     return PredictionResponse(
-        frie_score=round(score, 2), reliability_level=reliability_level(score)
+        algorithm_version=result["algorithm_version"],
+        frie_score=result["frie_score"],
+        dimensions=result["dimensions"],
+        profile=result["profile"],
+        profiles=result["profiles"],
     )
 
 
 @router.post(
     "/predict/partial",
     response_model=PartialPredictionResponse,
-    summary="Generate a prototype FRIE score with partial feature data",
+    summary="Generate a deterministic FRIE assessment with partial data",
     description=(
-        "Internal research capability for incomplete feature data. Uses the existing V2 "
-        "pipeline and its fitted preprocessing. Authenticated assessments additionally enforce source eligibility."
+        "Available information is scored directly by the six FRIE "
+        "dimensions. Missing information is represented through "
+        "dimension coverage and status rather than model imputation."
     ),
 )
 def predict_partial(
-    payload: PartialPredictionRequest, request: Request
+    payload: PartialPredictionRequest,
+    request: Request,
 ) -> PartialPredictionResponse:
     service = request.app.state.prediction_service
+
     try:
-        score, metadata = service.predict_with_partial_data(
-            payload.features.model_dump(exclude_none=True)
+        result = service.predict_with_partial_data(
+            payload.features.model_dump(exclude_none=True),
+            profile="neutral",
         )
     except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FRIE prediction service is temporarily unavailable.",
+            detail="FRIE scoring service is temporarily unavailable.",
         ) from exc
     except InsufficientDataError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "message": "Insufficient financial information for a reliable FRIE analysis.",
+                "message": (
+                    "Insufficient financial information for a FRIE assessment."
+                ),
                 "available_features": exc.available,
                 "required_features": exc.required,
                 "missing_groups": exc.missing_groups,
@@ -91,16 +116,18 @@ def predict_partial(
         ) from exc
     except FeatureInputError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
         ) from exc
 
     return PartialPredictionResponse(
-        frie_score=round(score, 2),
-        reliability_level=reliability_level(score),
-        data_coverage=metadata["data_coverage"],
-        available_features=metadata["available_features"],
-        total_features=metadata["total_features"],
-        missing_groups=metadata["missing_groups"],
-        model_used=metadata["model_used"],
-        warning=metadata.get("warning"),
+        algorithm_version=result["algorithm_version"],
+        frie_score=result["frie_score"],
+        dimensions=result["dimensions"],
+        profile=result["profile"],
+        profiles=result["profiles"],
+        data_coverage=result["data_coverage"],
+        available_features=result["available_features"],
+        total_features=result["total_features"],
+        missing_groups=result["missing_groups"],
     )

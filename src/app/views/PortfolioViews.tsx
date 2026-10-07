@@ -265,26 +265,23 @@ export function ScoreReportView({
 
 export function CurrentIndicatorPanel() {
   const { assessment, loading, error } = useCurrentAssessment();
-  const items = [
-    ["income_stability", "Income Stability"],
-    ["cashflow_stability", "Cash-flow Stability"],
-    ["payment_discipline", "Payment Discipline"],
-    ["savings_discipline", "Savings Discipline"],
-    ["commitment_adherence", "Commitment Adherence"],
-    ["debt_burden", "Debt Burden"],
-    ["financial_stress", "Financial Stress"],
-    ["financial_resilience", "Financial Resilience"],
-  ] as const;
+  const labels: Record<string, string> = {
+    credit_behaviour: "Credit Behaviour",
+    affordability: "Affordability",
+    cashflow_stability: "Cash-Flow Stability",
+    financial_resilience: "Financial Resilience",
+    commitment_adherence: "Commitment Adherence",
+    spending_behaviour: "Spending Behaviour",
+  };
   return (
     <section className={card}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-[14px] font-bold text-[#0F172A]">
-            FRIE Indicator Breakdown
+            FRIE Dimension Breakdown
           </h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            Eight methodology dimensions; each contributes 12.5% to the
-            prototype framework.
+            Six deterministic dimensions. The base score is their sum out of 600.
           </p>
         </div>
         {!assessment?.stale && assessment?.assessment_state === "estimated" && (
@@ -310,9 +307,9 @@ export function CurrentIndicatorPanel() {
         </p>
       ) : (
         <div className="mt-4 grid gap-x-8 sm:grid-cols-2">
-          {items.map(([key, label]) => {
-            const value = assessment.indicators?.[key] ?? null;
-            const detail = assessment.indicator_details?.[key];
+          {Object.entries(assessment.dimensions).map(([key, dimension]) => {
+            const value = dimension.score;
+            const label = labels[key] ?? key;
             return (
               <div key={key} className="border-b border-slate-100 py-3">
                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -331,19 +328,16 @@ export function CurrentIndicatorPanel() {
                     />
                   </div>
                 )}
-                {detail?.availability === "LIMITED" && (
-                  <p className="mt-1 text-[10px] text-slate-400">
-                    Limited information
-                  </p>
-                )}
+                <p className="mt-1 text-[10px] text-slate-400">
+                  {dimension.status} · {dimension.confidence} confidence · {(dimension.coverage * 100).toFixed(0)}% coverage
+                </p>
               </div>
             );
           })}
         </div>
       )}
       <p className="mt-3 text-[10px] text-slate-400">
-        Prototype methodology dimensions, separate from the model score and its
-        explanation. Not regulatory standards.
+        Coverage and confidence describe available evidence, not predictive accuracy.
       </p>
     </section>
   );
@@ -427,7 +421,7 @@ export function HistoryView() {
                     className="border-b last:border-0 text-[13px]"
                   >
                     <td className="py-3 font-bold text-[#0F172A]">
-                      {row.frie_score.toFixed(1)}
+                      {row.frie_score.value?.toFixed(1) ?? "—"} / {row.frie_score.maximum}
                     </td>
                     <td>{row.reliability_level}</td>
                     <td>{new Date(row.created_at).toLocaleString()}</td>
@@ -503,7 +497,7 @@ export function SettingsView({
             </p>
             <p className="mt-1 text-[14px] font-semibold text-slate-800">
               {latest
-                ? `${latest.frie_score.toFixed(1)} · ${new Date(latest.created_at).toLocaleDateString()}`
+                ? `${latest.frie_score.value?.toFixed(1) ?? "—"} / ${latest.frie_score.maximum} · ${new Date(latest.created_at).toLocaleDateString()}`
                 : "Not yet calculated"}
             </p>
           </div>

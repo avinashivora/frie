@@ -224,8 +224,8 @@ class Prediction(TimestampMixin, Base):
         nullable=True,
     )
 
-    overall_confidence: Mapped[float | None] = mapped_column(
-        Float,
+    overall_confidence: Mapped[str | None] = mapped_column(
+        String(16),
         nullable=True,
     )
 

@@ -178,8 +178,6 @@ def test_build_persists_98_idempotently(test_client) -> None:
 def test_built_vector_matches_contract_order_and_predicts(test_client) -> None:
     from app.core.feature_contract import get_feature_contract
     from app.services.feature_service import FeatureService
-    from app.services.prediction_service import PredictionService
-    from app.core.config import get_settings
 
     client, _ = test_client
     headers = _full_user(client, "full3@example.com")
@@ -193,15 +191,15 @@ def test_built_vector_matches_contract_order_and_predicts(test_client) -> None:
         name: rows[name]["value_num"] if rows[name]["value_num"] is not None else rows[name]["value_text"]
         for name in contract.feature_names
     }
-    service = PredictionService(get_settings())
-    service.load_model()
-    frame = FeatureService(contract).build_model_input(payload, service._pipeline_feature_order)
-    assert list(frame.columns) == list(service._pipeline_feature_order)
+    frame = FeatureService(contract).build_model_input(payload, contract.feature_names)
+    assert list(frame.columns) == list(contract.feature_names)
     assert frame.shape == (1, 98)
 
     response = client.post("/predict", json={"features": payload})
     assert response.status_code == 200
-    assert response.json()["reliability_level"] in {"Poor", "Average", "Good", "Excellent"}
+    body = response.json()
+    assert body["frie_score"]["maximum"] == 600.0
+    assert len(body["dimensions"]) == 6
 
 
 def test_derived_formulas_spot_check(test_client) -> None:

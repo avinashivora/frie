@@ -2,18 +2,54 @@ export type ReliabilityLevel = "Poor" | "Average" | "Good" | "Excellent";
 
 export interface HealthResponse {
   status: string;
-  model_loaded: boolean;
-  model: string;
+  scoring_engine: string;
+  algorithm_version?: string;
 }
 
 export type CustomerFeatureMap = Record<string, number | string>;
 
 export interface PredictionResponse {
-  frie_score: number;
-  reliability_level: ReliabilityLevel;
+  algorithm_version: string;
+  frie_score: FrieScore;
+  dimensions: Record<string, DimensionScore>;
+  profile: ProfileScore;
+  profiles: Record<"neutral" | "loan" | "insurance", ProfileScore>;
 }
 
-export interface AssessmentRecord extends PredictionResponse {
+export interface FrieScore {
+  value: number | null;
+  maximum: number;
+  available_dimensions: number;
+  dimension_count?: number;
+  coverage: number;
+  confidence: "High" | "Moderate" | "Low";
+}
+
+export interface DimensionScore {
+  score: number | null;
+  max_score: number;
+  coverage: number;
+  status: "AVAILABLE" | "LIMITED" | "NOT_ESTABLISHED" | "UNAVAILABLE";
+  confidence: "High" | "Moderate" | "Low";
+  indicators: Record<string, unknown>;
+  effective_weights: Record<string, number>;
+  validation: Record<string, unknown>;
+}
+
+export interface ProfileScore {
+  profile: "neutral" | "loan" | "insurance";
+  score: number | null;
+  maximum: number;
+  coverage: number;
+  confidence: "High" | "Moderate" | "Low";
+  configured_weights: Record<string, number>;
+  effective_weights: Record<string, number>;
+  available_dimensions: number;
+}
+
+export interface AssessmentRecord extends Omit<PredictionResponse, "frie_score"> {
+  frie_score: FrieScore;
+  reliability_level: ReliabilityLevel;
   id: number;
   model_version: string;
   created_at: string;
@@ -62,15 +98,12 @@ export interface FrieRecommendation {
 }
 
 export interface LocalExplanation {
-  score: number;
+  frie_score: FrieScore;
+  profile: ProfileScore;
+  dimensions: (DimensionScore & { dimension: string })[];
   reliability_level: ReliabilityLevel;
-  base_value: number;
   method: string;
-  model: string;
   scope: "LOCAL";
-  top_features: { feature: string; value: string | number; contribution: number }[];
-  top_positive: { feature: string; value: string | number; contribution: number }[];
-  top_negative: { feature: string; value: string | number; contribution: number }[];
   disclaimer: string;
 }
 
@@ -647,7 +680,7 @@ export async function predictFrieScore(features: CustomerFeatureMap): Promise<Pr
   }
 
   const body = await readJson<PredictionResponse>(response);
-  if (!Number.isFinite(body.frie_score) || !body.reliability_level) {
+  if (body.frie_score.value === null || !body.algorithm_version) {
     throw new FrieApiError("The FRIE service returned an incomplete score.");
   }
   return body;
@@ -796,14 +829,15 @@ export interface PartialPredictionRequest {
 }
 
 export interface PartialPredictionResponse {
-  frie_score: number;
-  reliability_level: ReliabilityLevel;
+  algorithm_version: string;
+  frie_score: FrieScore;
+  dimensions: Record<string, DimensionScore>;
+  profile: ProfileScore;
+  profiles: Record<"neutral" | "loan" | "insurance", ProfileScore>;
   data_coverage: number;
   available_features: number;
   total_features: number;
   missing_groups: string[];
-  model_used: string;
-  warning: string | null;
 }
 
 export async function predictPartial(features: Record<string, number | string | null>): Promise<PartialPredictionResponse> {
@@ -826,7 +860,7 @@ export async function predictPartial(features: Record<string, number | string | 
   }
 
   const body = await readJson<PartialPredictionResponse>(response);
-  if (!Number.isFinite(body.frie_score) || !body.reliability_level) {
+  if (body.frie_score.value === null || !body.algorithm_version) {
     throw new FrieApiError("The FRIE service returned an incomplete partial score.");
   }
   return body;
