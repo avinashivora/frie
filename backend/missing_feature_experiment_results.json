@@ -1,0 +1,290 @@
+[
+  {
+    "scenario": "FULL_DATA",
+    "features_available": 98,
+    "model_type": "full",
+    "mae": 1.7305763431549073,
+    "rmse": 2.1443334467281523,
+    "r2": 0.9720644616775714
+  },
+  {
+    "scenario": "FULL_DATA",
+    "features_available": 98,
+    "model_type": "missing_aware",
+    "mae": 1.5046929431915281,
+    "rmse": 1.8848110485346443,
+    "r2": 0.9784171872329221
+  },
+  {
+    "scenario": "FULL_DATA",
+    "features_available": 98,
+    "model_type": "missing_indicator",
+    "mae": 1.5240646759033203,
+    "rmse": 1.913439278659105,
+    "r2": 0.9777565691019844
+  },
+  {
+    "scenario": "A",
+    "features_available": 66,
+    "model_type": "full",
+    "mae": 9.164844606018066,
+    "rmse": 10.781297229066638,
+    "r2": 0.29382157672035336
+  },
+  {
+    "scenario": "A",
+    "features_available": 66,
+    "model_type": "missing_aware",
+    "mae": 14.17637727050781,
+    "rmse": 17.10259172800172,
+    "r2": -0.777036148018913
+  },
+  {
+    "scenario": "A",
+    "features_available": 66,
+    "model_type": "missing_indicator",
+    "mae": 9.177692524719237,
+    "rmse": 10.701981190942846,
+    "r2": 0.30417380821700424
+  },
+  {
+    "scenario": "B",
+    "features_available": 51,
+    "model_type": "full",
+    "mae": 4.488936256790161,
+    "rmse": 5.17833795908038,
+    "r2": 0.8370879581009096
+  },
+  {
+    "scenario": "B",
+    "features_available": 51,
+    "model_type": "missing_aware",
+    "mae": 9.262777663040163,
+    "rmse": 9.806907645746582,
+    "r2": 0.41569907166610975
+  },
+  {
+    "scenario": "B",
+    "features_available": 51,
+    "model_type": "missing_indicator",
+    "mae": 5.739674213027954,
+    "rmse": 6.395435343439461,
+    "r2": 0.7515078745764177
+  },
+  {
+    "scenario": "C",
+    "features_available": 83,
+    "model_type": "full",
+    "mae": 4.257734164428711,
+    "rmse": 5.1270224356366665,
+    "r2": 0.8403007629975316
+  },
+  {
+    "scenario": "C",
+    "features_available": 83,
+    "model_type": "missing_aware",
+    "mae": 4.68754348449707,
+    "rmse": 5.997431290223188,
+    "r2": 0.7814740747549958
+  },
+  {
+    "scenario": "C",
+    "features_available": 83,
+    "model_type": "missing_indicator",
+    "mae": 4.166624392318726,
+    "rmse": 5.048657701540787,
+    "r2": 0.8451453472884345
+  },
+  {
+    "scenario": "D",
+    "features_available": 81,
+    "model_type": "full",
+    "mae": 2.0208770267486575,
+    "rmse": 2.446132572533553,
+    "r2": 0.963647658728488
+  },
+  {
+    "scenario": "D",
+    "features_available": 81,
+    "model_type": "missing_aware",
+    "mae": 2.380692220687866,
+    "rmse": 2.865762830053566,
+    "r2": 0.9501054745635156
+  },
+  {
+    "scenario": "D",
+    "features_available": 81,
+    "model_type": "missing_indicator",
+    "mae": 1.8232233409881593,
+    "rmse": 2.259038103660677,
+    "r2": 0.9689958722252316
+  },
+  {
+    "scenario": "E",
+    "features_available": 62,
+    "model_type": "full",
+    "mae": 10.328744555664061,
+    "rmse": 12.19486716692766,
+    "r2": 0.09650333542586886
+  },
+  {
+    "scenario": "E",
+    "features_available": 62,
+    "model_type": "missing_aware",
+    "mae": 17.25105355453491,
+    "rmse": 20.414406380315246,
+    "r2": -1.5318963171386883
+  },
+  {
+    "scenario": "E",
+    "features_available": 62,
+    "model_type": "missing_indicator",
+    "mae": 10.210892289733886,
+    "rmse": 12.046368509638594,
+    "r2": 0.11837338090113203
+  },
+  {
+    "scenario": "F",
+    "features_available": 60,
+    "model_type": "full",
+    "mae": 9.456211641693114,
+    "rmse": 11.093160767760745,
+    "r2": 0.25237637012673797
+  },
+  {
+    "scenario": "F",
+    "features_available": 60,
+    "model_type": "missing_aware",
+    "mae": 15.293696303558349,
+    "rmse": 18.331493824271426,
+    "r2": -1.0415880692757558
+  },
+  {
+    "scenario": "F",
+    "features_available": 60,
+    "model_type": "missing_indicator",
+    "mae": 9.442287925720215,
+    "rmse": 11.027817027806101,
+    "r2": 0.2611581129195195
+  },
+  {
+    "scenario": "G",
+    "features_available": 41,
+    "model_type": "full",
+    "mae": 4.892459844589233,
+    "rmse": 5.88070563003342,
+    "r2": 0.7898974679092703
+  },
+  {
+    "scenario": "G",
+    "features_available": 41,
+    "model_type": "missing_aware",
+    "mae": 5.013793688201904,
+    "rmse": 6.029457457034224,
+    "r2": 0.7791339949943562
+  },
+  {
+    "scenario": "G",
+    "features_available": 41,
+    "model_type": "missing_indicator",
+    "mae": 5.325402639770508,
+    "rmse": 6.335728351574051,
+    "r2": 0.7561259997363512
+  },
+  {
+    "scenario": "H",
+    "features_available": 79,
+    "model_type": "full",
+    "mae": 2.600764731216431,
+    "rmse": 3.4842856640120607,
+    "r2": 0.9262435656037188
+  },
+  {
+    "scenario": "H",
+    "features_available": 79,
+    "model_type": "missing_aware",
+    "mae": 2.8287906147003175,
+    "rmse": 3.968230381812626,
+    "r2": 0.9043321175719904
+  },
+  {
+    "scenario": "H",
+    "features_available": 79,
+    "model_type": "missing_indicator",
+    "mae": 2.5414131462097167,
+    "rmse": 3.4500766122083286,
+    "r2": 0.9276847513863925
+  },
+  {
+    "scenario": "I",
+    "features_available": 70,
+    "model_type": "full",
+    "mae": 3.811093151473999,
+    "rmse": 5.186952732988185,
+    "r2": 0.8365454605577662
+  },
+  {
+    "scenario": "I",
+    "features_available": 70,
+    "model_type": "missing_aware",
+    "mae": 4.738135840606689,
+    "rmse": 6.834093020977449,
+    "r2": 0.7162511062315039
+  },
+  {
+    "scenario": "I",
+    "features_available": 70,
+    "model_type": "missing_indicator",
+    "mae": 3.984422804260254,
+    "rmse": 5.307351538577441,
+    "r2": 0.828869226014174
+  },
+  {
+    "scenario": "J",
+    "features_available": 61,
+    "model_type": "full",
+    "mae": 4.682314641952514,
+    "rmse": 6.098370602154674,
+    "r2": 0.7740564064244144
+  },
+  {
+    "scenario": "J",
+    "features_available": 61,
+    "model_type": "missing_aware",
+    "mae": 5.871087399291992,
+    "rmse": 7.912222605767293,
+    "r2": 0.6196622787168599
+  },
+  {
+    "scenario": "J",
+    "features_available": 61,
+    "model_type": "missing_indicator",
+    "mae": 4.862399879074097,
+    "rmse": 6.181418683735204,
+    "r2": 0.7678606701323121
+  },
+  {
+    "scenario": "K",
+    "features_available": 52,
+    "model_type": "full",
+    "mae": 5.328408647918701,
+    "rmse": 6.841904957699552,
+    "r2": 0.7156020383035169
+  },
+  {
+    "scenario": "K",
+    "features_available": 52,
+    "model_type": "missing_aware",
+    "mae": 7.764369422149657,
+    "rmse": 10.146832720277015,
+    "r2": 0.3744912247201362
+  },
+  {
+    "scenario": "K",
+    "features_available": 52,
+    "model_type": "missing_indicator",
+    "mae": 5.480129896163939,
+    "rmse": 6.988748297543264,
+    "r2": 0.7032633397978163
+  }
+]

@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*-tmp/
+test-tmp/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+storage/
+uploads/
+.paddleocr/
+.cache/
