@@ -15,9 +15,14 @@ from typing import Any
 
 from app.core.config import Settings
 from app.core.feature_contract import FeatureContract, get_feature_contract
-from app.services.feature_service import FeatureService
-from app.services.scoring.frie_score import calculate_frie_score
-from app.services.scoring.profiles import calculate_profile
+from app.services.scoring.frie_score import (
+    ALGORITHM_VERSION,
+    DIMENSION_ORDER,
+    calculate_base_score,
+    calculate_dimensions,
+    calculate_frie_score,
+)
+from app.services.scoring.profiles import PROFILE_WEIGHTS, calculate_profile_score
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +56,6 @@ class PredictionService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._contract: FeatureContract = get_feature_contract()
-        self._feature_service = FeatureService(self._contract)
 
     @property
     def is_loaded(self) -> bool:
@@ -79,28 +83,7 @@ class PredictionService:
         *,
         profile: str = "neutral",
     ) -> dict[str, Any]:
-        """Calculate the authoritative FRIE score.
-
-        Parameters
-        ----------
-        features:
-            Source-normalized FRIE customer features.
-
-        profile:
-            Scoring profile. Supported values are:
-            - neutral
-            - loan
-            - insurance
-
-        Returns
-        -------
-        dict
-            Structured six-dimension FRIE result containing:
-            - algorithm version
-            - FRIE base score /600
-            - six dimension results
-            - selected purpose-specific profile score
-        """
+        """Calculate dimensions once, then derive base and profile scores."""
 
         if not isinstance(features, dict):
             raise TypeError("features must be a dictionary.")
@@ -109,28 +92,36 @@ class PredictionService:
             raise ValueError("profile must be one of: neutral, loan, insurance.")
 
         if not features:
-            raise InsufficientDataError(
-                available=0,
-                required=1,
-                missing_groups=[],
-            )
+            raise InsufficientDataError(available=0, required=1, missing_groups=[])
 
-        # The deterministic FRIE engine calculates all six dimensions once.
-        frie_result = calculate_frie_score(features)
-
-        # Calculate the selected purpose-specific profile from the same
-        # dimension results. This does not recalculate the dimensions.
-        profile_result = calculate_profile(
-            features,
-            profile=profile,
-        )
+        dimensions = calculate_dimensions(features)
+        base_score = calculate_base_score(dimensions)
+        profiles = {
+            name: calculate_profile_score(dimensions, profile=name)
+            for name in PROFILE_WEIGHTS
+        }
+        profile_result = profiles[profile]
 
         return {
-            "algorithm_version": frie_result["algorithm_version"],
-            "frie_score": frie_result["frie_score"],
-            "dimensions": frie_result["dimensions"],
+            "algorithm_version": ALGORITHM_VERSION,
+            "frie_score": base_score,
+            "dimensions": {
+                name: {
+                    "score": dimensions[name].score,
+                    "max_score": 100.0,
+                    "coverage": dimensions[name].coverage,
+                    "status": dimensions[name].status,
+                    "confidence": dimensions[name].confidence,
+                    "indicators": dimensions[name].indicators,
+                    "effective_weights": dimensions[name].effective_weights,
+                    "validation": dimensions[name].validation,
+                }
+                for name in DIMENSION_ORDER
+            },
             "profile": profile_result,
+            "profiles": profiles,
         }
+
 
     def predict(
         self,

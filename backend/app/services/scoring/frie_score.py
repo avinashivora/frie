@@ -165,6 +165,10 @@ def _normalise_result(raw: Any) -> DimensionResult:
         coverage = 0.0
     if not isfinite(coverage):
         coverage = 0.0
+    # Credit Behaviour and Commitment Adherence historically report evidence
+    # coverage as a percentage; the six-dimension API uses a 0–1 fraction.
+    if 1.0 < coverage <= 100.0:
+        coverage /= 100.0
     coverage = max(0.0, min(1.0, coverage))
 
     status = _normalise_status(get("status"), score, coverage)
@@ -172,6 +176,10 @@ def _normalise_result(raw: Any) -> DimensionResult:
     confidence = get("confidence", "Low")
     confidence = getattr(confidence, "value", confidence)
     confidence = str(confidence)
+    if confidence not in {"High", "Moderate", "Low"}:
+        # Older component modules used labels such as "Insufficient".
+        # The public FRIE API exposes only qualitative evidence confidence.
+        confidence = "Low"
 
     indicators = get("indicators", get("indicator_scores", {}))
     if not isinstance(indicators, Mapping):

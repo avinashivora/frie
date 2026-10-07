@@ -305,23 +305,6 @@ def _source_fingerprint(db: Session, user: User) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _ready_assembly(db: Session, user: User):
-    assembly = feature_engineering.assemble(db, user)
-    readiness = feature_engineering.readiness_report(assembly, get_feature_contract())
-    if readiness["status"] != "READY":
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "message": "A full assessment requires all model features.",
-                "status": readiness["status"],
-                "available": readiness["available"],
-                "required": readiness["total_required"],
-                "missing": readiness["missing"],
-            },
-        )
-    return assembly, readiness
-
-
 @router.get("/status")
 def assessment_status(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -338,8 +321,9 @@ def _predict(
     *,
     profile: str = "neutral",
 ) -> tuple[dict[str, Any], str]:
-    from app.api.routes.prediction import reliability_level
+    """Run the authoritative deterministic FRIE scoring engine."""
 
+    from app.api.routes.prediction import reliability_level
     service = request.app.state.prediction_service
 
     try:
@@ -358,26 +342,24 @@ def _predict(
             detail=str(exc),
         ) from exc
 
-    score = float(
-        result["frie_score"].get(
-            "value",
-            result["frie_score"].get("score"),
+    frie_score = result["frie_score"]
+
+    score = frie_score.get("value")
+
+    if score is None:
+        raise HTTPException(
+            status_code=409,
+            detail="FRIE could not calculate a score from the available data.",
         )
+
+    maximum = frie_score.get("maximum", 600.0)
+
+    level = reliability_level(
+        float(score),
+        maximum=float(maximum),
     )
 
-    return result, reliability_level(score)
-
-
-def _shap(request: Request, features: dict[str, Any]) -> dict[str, Any]:
-    try:
-        return request.app.state.prediction_service.explain(features)
-    except ModelUnavailableError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="FRIE explanation service is temporarily unavailable.",
-        ) from exc
-    except (FeatureInputError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result, level
 
 
 @router.post("/assess")
@@ -400,28 +382,41 @@ def create_assessment(
             },
         )
     features = assembly.values
-    complete = source_status["assessment_state"] == "complete"
-    service = request.app.state.prediction_service
     try:
-        if complete:
-            score, level = _predict(request, features)
-            model_features = features
-            explanation = _shap(request, model_features)
-        else:
-            model_features = {
-                name: features.get(name)
-                for name in get_feature_contract().feature_names
-            }
-            score, _metadata = service.predict_with_partial_data(features)
-            from app.api.routes.prediction import reliability_level
+        result, level = _predict(
+            request,
+            features,
+            profile="neutral",
+        )
+        dimensions = result["dimensions"]
+        explanation = {
+            "method": "Deterministic FRIE six-dimension methodology",
+            "scope": "LOCAL",
+            "algorithm_version": result["algorithm_version"],
+            "frie_score": result["frie_score"],
+            "profile": result["profile"],
+            "dimensions": [
+                {"dimension": name, **dimension}
+                for name, dimension in dimensions.items()
+                if dimension["score"] is not None
+            ],
+        }
+        # Kept as compatibility context for recommendations and older panels;
+        # these indicators do not contribute to the canonical FRIE score.
+        indicator_details = calculate_indicator_details(features)
+        indicators = {key: item["score"] for key, item in indicator_details.items()}
+        recommendations = generate_recommendations(
+            indicators,
+            missing_sources=[item["key"] for item in source_status["sources"]
+                             if item["status"] in {"required", "recommended", "unknown"}],
+        )
 
-            level = reliability_level(score)
-            explanation = service.explain(model_features, allow_missing=True)
     except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=503,
-            detail="FRIE prediction service is temporarily unavailable.",
+            detail="FRIE scoring service is temporarily unavailable.",
         ) from exc
+
     except InsufficientDataError as exc:
         raise HTTPException(
             status_code=409,
@@ -431,23 +426,12 @@ def create_assessment(
                 "sources": source_status["sources"],
             },
         ) from exc
+
     except FeatureInputError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    indicator_details = calculate_indicator_details(features)
-    indicators = {key: detail["score"] for key, detail in indicator_details.items()}
-    incomplete_sources = [
-        source["key"]
-        for source in source_status["sources"]
-        if source["status"] in {"required", "recommended", "unknown"}
-    ]
-    recommendations = generate_recommendations(
-        indicators, missing_sources=incomplete_sources if not complete else []
-    )
-    result, level = _predict(
-        request,
-        features,
-        profile="neutral",
-    )
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
     row = persist_assessment(
         db,
@@ -456,8 +440,7 @@ def create_assessment(
         result=result,
         reliability_level=level,
     )
-    db.add(row)
-    db.flush()
+
     # Store the exact source vector with the assessment. It supports truthful
     # stale-result detection and makes local explanation rows auditable.
     for name, value in features.items():
@@ -479,16 +462,6 @@ def create_assessment(
             explanation_type="source_snapshot",
         )
     )
-    for item in explanation["top_features"]:
-        db.add(
-            Explanation(
-                prediction_id=row.id,
-                feature_name=item["feature"],
-                feature_value=json.dumps(item["value"], ensure_ascii=False),
-                contribution=item["contribution"],
-                explanation_type="SHAP_LOCAL",
-            )
-        )
     db.add(
         Explanation(
             prediction_id=row.id,
@@ -520,10 +493,13 @@ def create_assessment(
                 explanation_type=RECOMMENDATION_EXPLANATION_TYPE,
             )
         )
-    db.flush()
     return {
         "id": row.id,
-        "frie_score": round(score, 2),
+        "frie_score": result["frie_score"],
+        "profile": result["profile"],
+        "profiles": result["profiles"],
+        "dimensions": result["dimensions"],
+        "algorithm_version": result["algorithm_version"],
         "reliability_level": level,
         "model_version": row.model_version,
         "created_at": row.created_at,
@@ -581,15 +557,17 @@ def latest_assessment(
         or source_snapshot.feature_value != _source_fingerprint(db, user)
     )
     return {
-        "id": row.id,
-        "frie_score": row.predicted_frie_score,
-        "reliability_level": row.reliability_level,
-        "model_version": row.model_version,
-        "created_at": row.created_at,
-        "readiness": readiness,
-        "source_readiness": _source_readiness(db, user, assembly, readiness)["sources"],
-        "stale": stale,
+        **deserialize_assessment(row),
         **persisted,
+        "model_version": row.model_version,
+        "readiness": readiness,
+        "source_readiness": _source_readiness(
+            db,
+            user,
+            assembly,
+            readiness,
+        )["sources"],
+        "stale": stale,
     }
 
 
@@ -627,22 +605,21 @@ def local_explanation(
                 "sources": source_status["sources"],
             },
         )
-    complete = source_status["assessment_state"] == "complete"
-    service = request.app.state.prediction_service
     try:
-        if complete:
-            score = service.predict(assembly.values)
-            model_features = assembly.values
-        else:
-            model_features = {
-                name: assembly.values.get(name)
-                for name in get_feature_contract().feature_names
-            }
-            score, _metadata = service.predict_with_partial_data(assembly.values)
-        from app.api.routes.prediction import reliability_level
-
-        level = reliability_level(score)
-        explanation = service.explain(model_features, allow_missing=not complete)
+        result, level = _predict(request, assembly.values, profile="neutral")
+        explanation = {
+            "method": "Deterministic FRIE six-dimension methodology",
+            "scope": "LOCAL",
+            "algorithm_version": result["algorithm_version"],
+            "frie_score": result["frie_score"],
+            "profile": result["profile"],
+            "profiles": result["profiles"],
+            "dimensions": [
+                {"dimension": name, **dimension}
+                for name, dimension in result["dimensions"].items()
+                if dimension["score"] is not None
+            ],
+        }
     except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=503,
@@ -660,7 +637,6 @@ def local_explanation(
     except (FeatureInputError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
-        "score": round(score, 2),
         "reliability_level": level,
         "assessment_state": source_status["assessment_state"],
         "readiness": {
@@ -668,5 +644,5 @@ def local_explanation(
             "sources": source_status["sources"],
         },
         **explanation,
-        "disclaimer": "SHAP values describe local model contributions, not causal effects.",
+        "disclaimer": "Dimension indicators and weights describe the deterministic methodology; they do not establish cause and effect.",
     }

@@ -55,8 +55,8 @@ app = FastAPI(
     title="FRIE Prototype API",
     version="0.1.0",
     description=(
-        "Backend for the Financial Reliability Intelligence Engine prototype. "
-        "It calls the provided preprocessing-plus-XGBoost pipeline without retraining it."
+        "Backend for the deterministic FRIE six-dimension financial intelligence "
+        "prototype. Legacy ML artifacts are not used for authoritative scoring."
     ),
     lifespan=lifespan,
 )

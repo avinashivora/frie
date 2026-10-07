@@ -60,10 +60,10 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: View) =>
         </button>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5 items-start">
         <FullPredictionCard onCompleteSource={source => onNavigate(source === "profile" || source === "income" ? "profile" : "documents")} />
 
-        <div className="lg:col-span-2 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Financial Snapshot — your stored data</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Stat title="Monthly Income"  value={fmtFeature(snapshot, "monthly_income")}  sub="Your stated income" icon={DollarSign} variant="green" />

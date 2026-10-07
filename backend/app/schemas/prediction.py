@@ -96,7 +96,7 @@ class PredictionRequest(BaseModel):
 
 
 class DimensionResponse(BaseModel):
-    score: float
+    score: float | None
     max_score: float = 100.0
     coverage: float
     status: Literal[
@@ -105,62 +105,62 @@ class DimensionResponse(BaseModel):
         "NOT_ESTABLISHED",
         "UNAVAILABLE",
     ]
-    confidence: float
-    indicators: dict[str, Any] = {}
-    effective_weights: dict[str, float] = {}
+    confidence: Literal["High", "Moderate", "Low"]
+    indicators: dict[str, Any] = Field(default_factory=dict)
+    effective_weights: dict[str, float] = Field(default_factory=dict)
+    validation: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProfileResponse(BaseModel):
     profile: Literal["neutral", "loan", "insurance"]
-    score: float
-    max_score: float = 100.0
+    score: float | None
+    maximum: float = 100.0
     coverage: float
-    confidence: float
+    confidence: Literal["High", "Moderate", "Low"]
     configured_weights: dict[str, float]
     effective_weights: dict[str, float]
+    available_dimensions: int
+
+
+class FrieScoreResponse(BaseModel):
+    value: float | None
+    maximum: float = 600.0
+    available_dimensions: int
+    dimension_count: int
+    coverage: float
+    confidence: Literal["High", "Moderate", "Low"]
 
 
 class PredictionResponse(BaseModel):
     algorithm_version: str
-
-    frie_score: float
-    max_score: float = 600.0
-
+    frie_score: FrieScoreResponse
     dimensions: dict[str, DimensionResponse]
-
-    profile: ProfileResponse | None = None
+    profile: ProfileResponse
+    profiles: dict[Literal["neutral", "loan", "insurance"], ProfileResponse]
 
 
 class PartialPredictionRequest(BaseModel):
-    """Incomplete customer feature record for prototype scoring with partial data."""
+    """Incomplete customer feature record for deterministic FRIE scoring."""
 
     model_config = ConfigDict(extra="forbid")
+
     features: PartialCustomerFeatureData = Field(  # type: ignore
         description=(
-            "Available customer feature data for the internal available-data endpoint. "
-            "Missing values are handled by the existing V2 pipeline preprocessors."
+            "Available source-normalized FRIE customer features. "
+            "Unavailable information is preserved as missing and handled "
+            "at the dimension level by the deterministic FRIE scoring engine."
         )
     )
 
 
 class PartialPredictionResponse(BaseModel):
-    """The score output from the FRIE prototype pipeline with partial data."""
+    algorithm_version: str
+    frie_score: FrieScoreResponse
+    dimensions: dict[str, DimensionResponse]
+    profile: ProfileResponse
+    profiles: dict[Literal["neutral", "loan", "insurance"], ProfileResponse]
 
-    frie_score: float = Field(description="Prototype FRIE score, rounded for display.")
-    reliability_level: Literal["Poor", "Average", "Good", "Excellent"] = Field(
-        description="Prototype calibration category; not a regulatory or universal threshold."
-    )
-    data_coverage: float = Field(
-        description="Fraction of 98 features that were provided."
-    )
-    available_features: int = Field(description="Number of features provided.")
-    total_features: int = Field(description="Total required features (98).")
-    missing_groups: list[str] = Field(
-        description="Document groups with missing features."
-    )
-    model_used: str = Field(
-        description="Model used: 'full', 'full_imputed', 'missing_aware', or 'none'."
-    )
-    warning: Optional[str] = Field(
-        default=None, description="Warning about data quality or imputation."
-    )
+    data_coverage: float
+    available_features: int
+    total_features: int
+    missing_groups: list[str]

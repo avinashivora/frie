@@ -27,31 +27,37 @@ from .frie_score import (
 )
 
 
+NEUTRAL_WEIGHTS: dict[str, float] = {
+    "credit_behaviour": 0.20,
+    "affordability": 0.20,
+    "cashflow_stability": 0.20,
+    "financial_resilience": 0.15,
+    "commitment_adherence": 0.15,
+    "spending_behaviour": 0.10,
+}
+
+LOAN_WEIGHTS: dict[str, float] = {
+    "credit_behaviour": 0.30,
+    "affordability": 0.25,
+    "cashflow_stability": 0.15,
+    "financial_resilience": 0.10,
+    "commitment_adherence": 0.15,
+    "spending_behaviour": 0.05,
+}
+
+INSURANCE_WEIGHTS: dict[str, float] = {
+    "credit_behaviour": 0.15,
+    "affordability": 0.15,
+    "cashflow_stability": 0.20,
+    "financial_resilience": 0.20,
+    "commitment_adherence": 0.25,
+    "spending_behaviour": 0.05,
+}
+
 PROFILE_WEIGHTS: dict[str, dict[str, float]] = {
-    "neutral": {
-        "credit_behaviour": 0.20,
-        "affordability": 0.20,
-        "cashflow_stability": 0.20,
-        "financial_resilience": 0.15,
-        "commitment_adherence": 0.15,
-        "spending_behaviour": 0.10,
-    },
-    "loan": {
-        "credit_behaviour": 0.30,
-        "affordability": 0.25,
-        "cashflow_stability": 0.15,
-        "financial_resilience": 0.10,
-        "commitment_adherence": 0.15,
-        "spending_behaviour": 0.05,
-    },
-    "insurance": {
-        "credit_behaviour": 0.15,
-        "affordability": 0.15,
-        "cashflow_stability": 0.20,
-        "financial_resilience": 0.20,
-        "commitment_adherence": 0.25,
-        "spending_behaviour": 0.05,
-    },
+    "neutral": NEUTRAL_WEIGHTS,
+    "loan": LOAN_WEIGHTS,
+    "insurance": INSURANCE_WEIGHTS,
 }
 
 

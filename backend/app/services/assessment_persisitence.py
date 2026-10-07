@@ -29,8 +29,10 @@ def _extract_overall_coverage(result: dict[str, Any]) -> float | None:
     return float(coverage)
 
 
-def _extract_overall_confidence(result: dict[str, Any]) -> float | None:
-    """Read overall confidence from the deterministic scoring result."""
+def _extract_overall_confidence(
+    result: dict[str, Any],
+) -> str | None:
+    """Read qualitative overall confidence from the scoring result."""
 
     frie_score = result.get("frie_score") or {}
 
@@ -39,10 +41,8 @@ def _extract_overall_confidence(result: dict[str, Any]) -> float | None:
     if confidence is None:
         confidence = result.get("confidence")
 
-    # The scoring engine may eventually expose confidence as a
-    # qualitative label. Do not force that into a numeric database field.
-    if isinstance(confidence, (int, float)):
-        return float(confidence)
+    if confidence in {"High", "Moderate", "Low"}:
+        return confidence
 
     return None
 
@@ -90,7 +90,11 @@ def persist_assessment(
     if not scoring_profile:
         scoring_profile = "neutral"
 
-    dimensions = result.get("dimensions", {})
+    dimensions = {
+        "dimensions": result.get("dimensions", {}),
+        "profile": result.get("profile", {}),
+        "profiles": result.get("profiles", {}),
+    }
 
     row = Prediction(
         user_id=user_id,
@@ -122,20 +126,43 @@ def deserialize_assessment(row: Prediction) -> dict[str, Any]:
     """Reconstruct the persisted deterministic FRIE result."""
 
     try:
-        dimensions = json.loads(row.dimensions_json or "{}")
+        stored = json.loads(row.dimensions_json or "{}")
     except (TypeError, json.JSONDecodeError):
-        dimensions = {}
+        stored = {}
+    if "dimensions" in stored:
+        dimensions = stored.get("dimensions") or {}
+        profile = stored.get("profile") or {}
+        profiles = stored.get("profiles") or ({profile.get("profile"): profile} if profile else {})
+    else:  # compatibility with early FRIE-6D snapshots
+        dimensions = stored
+        profile = {
+            "profile": row.scoring_profile,
+            "score": None,
+            "maximum": 100.0,
+            "coverage": row.overall_coverage,
+            "confidence": row.overall_confidence,
+            "configured_weights": {},
+            "effective_weights": {},
+            "available_dimensions": sum(
+                item.get("score") is not None
+                for item in dimensions.values()
+                if isinstance(item, dict)
+            ),
+        }
+        profiles = {profile.get("profile", "neutral"): profile}
 
     return {
         "id": row.id,
         "frie_score": {
             "value": row.predicted_frie_score,
             "maximum": row.frie_maximum,
+            "coverage": row.overall_coverage,
+            "confidence": row.overall_confidence,
         },
         "algorithm_version": row.algorithm_version,
-        "profile": row.scoring_profile,
-        "coverage": row.overall_coverage,
-        "confidence": row.overall_confidence,
+        "model_version": row.algorithm_version,
+        "profile": profile,
+        "profiles": profiles,
         "dimensions": dimensions,
         "reliability_level": row.reliability_level,
         "created_at": row.created_at,
